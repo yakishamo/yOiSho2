@@ -1,0 +1,131 @@
+#include "../common/types64.h"
+#include "memory.h"
+#include "string.h"
+
+#define KERNEL_HEAP_FRAMES 64*512
+#define KMALLOC_CHUNK_MAGIC "ChunkHead"
+
+typedef struct ChunkHead ChunkHead;
+typedef union ChunkFlag ChunkFlag;
+
+static uint8_t *kernel_heap = NULL;
+static ChunkHead *chunk_root = NULL;
+
+union ChunkFlag {
+  uint64_t data;
+  struct {
+    uint64_t available : 1;
+    uint64_t reserved : 63;
+  } bits __attribute__((packed));
+} __attribute__((packed));
+
+struct ChunkHead {
+  char magic[16];
+  ChunkHead *next;
+  uint64_t size;
+  ChunkFlag flags;
+  uint8_t chunk[];
+} __attribute__((packed));
+
+static void InitChunk(ChunkHead *ch, ChunkHead *next, uint64_t size, uint64_t available) {
+  strcpy(ch->magic, KMALLOC_CHUNK_MAGIC);
+  ch->next = next;
+  ch->size = size;
+  ch->flags.bits.available = available & 1;
+  // memset(&ch->chunk, 0, size);
+}
+
+void InitializeKernelHeap(){
+  kernel_heap = (uint8_t*)AllocatePage(KERNEL_HEAP_FRAMES);
+  if(kernel_heap == NULL) {
+    __asm__("int3");
+  }
+  chunk_root = (ChunkHead*)kernel_heap;
+  InitChunk(chunk_root, NULL, KERNEL_HEAP_FRAMES * 0x1000 - sizeof(ChunkHead), 1);
+}
+
+// あんまり複雑なkmallocは後で実装
+// 空きチャンクをマージするようにしているがなんか間違ってるっぽい
+/*
+void *kmalloc(uint64_t size) {
+  ChunkHead *iter = chunk_root;
+  if(size%8 != 0) {
+    size = size - size%8 + 8;
+  }
+  for(;;) {
+    if(iter == NULL) {
+      return NULL;
+    }
+    if(iter->flags.bits.available == 1) {
+      if(iter->size >= size + sizeof(ChunkHead)) {
+        ChunkHead *new = (ChunkHead*)(((uintptr_t)iter) + sizeof(ChunkHead) + size);
+        InitChunk(new, iter->next, iter->size - sizeof(ChunkHead) - size, 1);
+        InitChunk(iter, new, size, 0);
+        return (void*)iter->chunk;
+      } else {
+        ChunkHead *iter2 = iter->next;
+        uint64_t available_size = iter->size;
+        for(;;) {
+          if(iter2 == NULL) {
+            return NULL;
+          }
+          available_size += iter2->size;
+          if(iter2->flags.bits.available == 0) {
+            iter = iter2->next;
+            break;
+          } else if(available_size < size + sizeof(ChunkHead)) {
+            available_size += sizeof(ChunkHead);
+            iter2 = iter2->next;
+          } else {
+            ChunkHead *new = (ChunkHead*)(((uintptr_t)iter) + sizeof(ChunkHead) + size);
+            InitChunk(new, iter2->next, available_size - sizeof(ChunkHead) - size, 1);
+            InitChunk(iter, new, size, 0);
+            return (void*)iter->chunk;
+          }
+        }
+      }
+    } else {
+      iter = iter->next;
+    }
+  }
+}
+
+void kfree(void *ptr) {
+  ChunkHead *ch = (ChunkHead*)(((uintptr_t)ptr) - sizeof(ChunkHead));
+  if(strcmp(ch->magic, KMALLOC_CHUNK_MAGIC) != 0) {
+    __asm__("int3");
+  }
+  ch->flags.bits.available = 1;
+}
+*/
+
+// kfreeしても何もせず後ろにどんどん確保していくだけのkmalloc
+void *kmalloc(uint64_t size){ 
+	ChunkHead *chunk = chunk_root;
+	while(!chunk->flags.bits.available && chunk->next != NULL) {
+		chunk = chunk->next;
+	}
+	if(chunk->size < size + sizeof(ChunkHead)) {
+		return NULL;
+	}
+	if(!chunk->flags.bits.available) {
+		return NULL;
+	}
+	ChunkHead *next = (ChunkHead*)(((uintptr_t)chunk) + sizeof(ChunkHead) + size);
+	uint64_t next_size = chunk->size - sizeof(ChunkHead) - size;
+	ChunkHead *next_next = chunk->next;
+	InitChunk(chunk, next, size, 0);
+	InitChunk(next, next_next, next_size, 1);
+	return chunk->chunk;
+}
+
+void kfree(void *ptr) {}
+
+void DumpHeap() {
+  ChunkHead *iter = chunk_root;
+  uint64_t size = 0;
+  while(iter != NULL) {
+    size += iter->size;
+    iter = iter->next;
+  }
+}

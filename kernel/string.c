@@ -1,0 +1,205 @@
+#include "string.h"
+#include "stdarg.h"
+
+#include "../common/types64.h"
+#include "../common/def.h"
+
+int strlen(const char *str) {
+	int i = 0;
+	while(str[i] != '\0') i++;
+	return i;
+}
+
+void *memset(void* s, int c, size_t n) {
+	for(size_t i = 0; i < n; i++) ((char*)s)[i] = c;
+	return s;
+}
+
+void *memmove(void *buf1, const void *buf2, size_t n) {
+	char *d = buf1;
+	const char *s = buf2;
+	if(d==s) return d;
+
+	if(d<s)
+		for(;n;n--) *d++ = *s++;
+	else 
+		while(n)n--, d[n]=s[n];
+	return buf1;
+}
+
+void *memcpy(void *buf1, void *buf2, size_t n) {
+	for(int i = 0; i < n; i++) {
+		((char*)buf1)[i] = ((char*)buf2)[i];
+	}
+	return buf1;
+}
+
+int memcmp(const void *s1, const void *s2, size_t n) {
+	const char *uc1, *uc2;
+	uc1 = (char*)s1;
+	uc2 = (char*)s2;
+	for(int i = 0; i < n; i++) {
+		int ret = uc1[i] - uc2[i];
+		if(ret != 0) {
+			return ret;
+		}
+	}
+	return 0;
+}
+
+int strcmp(const char *s1, const char *s2) {
+	const char *p1 = s1;
+	const char *p2 = s2;
+	while(*p1 && *p2) {
+		if(*p1 - *p2) return *p1 - *p2;
+		p1++;
+		p2++;
+	}
+	return *p1 - *p2;
+}
+
+int strncmp(const char *s1, const char *s2, size_t n) {
+	for(int i = 0; i < n; i++) {
+		if(s1[i] - s2[i] != 0 || s2[i] == '\0') return s1[i] - s2[i];
+	}
+	return 0;
+}
+
+char *strncpy(char *s1, const char *s2, size_t n) {
+	int i;
+	for(i = 0; i < n; i++) {
+		s1[i] = s2[i];
+		if(s2[i] == '\0') {
+			break;
+		}
+	}
+	for(;i < n; i++) {
+		s1[i] = '\0';
+	}
+	return s1;
+}
+
+char *strcpy(char *s1, const char *s2) {
+	int i = 0;
+	while(s2[i] != '\0') {
+		s1[i] = s2[i];
+		i++;
+	}
+	s1[i] = '\0';
+	return s1;
+}
+
+char *strcat(char *s1, const char *s2) {
+	int s1_len = strlen(s1);
+	strcpy(s1+s1_len, s2);
+	return s1;
+}
+
+int pow(int a, int b) {
+	int ret = 1;
+	for(int i = 0; i < b; i++) {
+		ret *= a;
+	}
+	return ret;
+}
+
+int atoi(char *str) {
+	int ret = 0;
+	int len = strlen(str);
+	char zero = '0';
+	for(int i = 0; i < len; i++) {
+		ret += pow(10,len-i-1)*(str[i]-zero);
+	}
+	return ret;
+}
+
+void itoa(char *str, uint64_t a, unsigned int radix) {
+	char *p = str;
+	unsigned int v = a;
+	int n = 1;
+	while(v >= radix) {
+		v/=radix;
+		n++;
+	}
+	p = str + n;
+	v = a;
+	*p = '\0';
+	do {
+		p--;
+		*p = v % radix + (char)'0';
+		if(*p > (char)'9') {
+			*p = v % radix - 10 + 'A';
+		}
+		v /= radix;
+	} while(p != str);
+	return;
+}
+
+void toupper(char str[]) {
+	for(char *c = str; *c != '\0'; c++) {
+		if('a' <= *c && *c <= 'z') {
+			*c = *c + ('A' - 'a');
+		}
+	}
+}
+
+void tolower(char str[]) {
+	for(char *c = str; *c != '\0'; c++) {
+		if('A' <= *c && *c <= 'Z') {
+			*c = *c + ('a' - 'A');
+		}
+	}
+}
+
+int snprintf(char *str, size_t n, const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	int ret = vsnprintf(str, n, fmt, ap);
+	va_end(ap);
+	return ret;
+}
+
+int vsnprintf(char *str, size_t n, const char *fmt, va_list ap) {
+	int i = 0;
+	for(const char *c = fmt; *c != '\0' && i < n; c++) {
+		if(*c == '%') {
+			c++;
+			if(*c == 's') {
+				char *arg_char = va_arg(ap, char*);
+				int len = strlen(arg_char);
+				if(len + i >= n) {
+					return i;
+				}
+				strcat(str, arg_char);
+				i += len;
+			} else if (*c == 'd' || *c == 'x' || *c == 'X') {
+				int arg_int = va_arg(ap, int);
+				char arg_int_str[64];
+				if (*c == 'd') {
+					itoa(arg_int_str, arg_int, 10);
+				} else {
+					itoa(arg_int_str, arg_int, 16);
+					if(*c == 'x') {
+						tolower(arg_int_str);
+					} else { // *c == 'X'
+						toupper(arg_int_str);
+					}
+				}
+				int len = strlen(arg_int_str);
+				if(len + i >= n) {
+					return i;
+				}
+				strcat(str, arg_int_str);
+				i += len;
+			} else if (*c == '\0') {
+				str[i] = '\0';
+				return i;
+			}
+		} else {
+			str[i] = *c;
+			i++;
+		}
+	}
+	str[i] = 0;
+	return i;
+}

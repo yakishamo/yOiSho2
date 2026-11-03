@@ -1,0 +1,17 @@
+#ifndef FAT_H
+#define FAT_H
+
+#include "../common/types64.h"
+
+typedef struct FatFilesystem_ *FatFilesystem;
+typedef struct DirEntry_ *DirEntry;
+
+FatFilesystem loadFat(void* data);
+void printRootDir(FatFilesystem fat);
+size_t getFileData(FatFilesystem fat, DirEntry dir_ent, char *buf);
+uint32_t getEntSize(DirEntry ent);
+void getDirName(DirEntry entry, char *name);
+DirEntry getDirEntryByName(FatFilesystem fat, const char *name);
+void fat_test();
+
+#endif /* FAT_H */

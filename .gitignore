@@ -1,0 +1,11 @@
+*.o
+*.fd
+*.efi
+*.elf
+ovmf
+.DS_Store
+*.swp
+*.EFI
+qemu_debug.log
+mnt
+*.img

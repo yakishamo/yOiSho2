@@ -1,0 +1,11 @@
+#ifndef MEMORY_H
+#define MEMORY_H
+
+#include "../common/memory_map.h"
+
+void InitializeMemoryMap(UefiMemoryMap *u_mmap);
+uint64_t AllocatePage(uint64_t page_size);
+uint64_t GetAvailablePages();
+uint64_t GetPageMax();
+
+#endif /* MEMORY_H */
